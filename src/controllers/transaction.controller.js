@@ -6,25 +6,34 @@ export const transaction = async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
-    const { toAccount, amount } = req.body;
+    const { toAccount, amount,PIN } = req.body;
 
+    if (!PIN || !/^\d{4}$/.test(PIN)) {
+      throw new Error("Enter valid 4-digit PIN");
+}
     if (!amount || amount <= 0) {
       throw new Error("Invalid amount");
     }
 
     session.startTransaction();
 
-    const senderAccount = await Account.findOne({ user: req.userId }).session(session);
+    const senderAccount = await Account.findOne({ user: req.userId }).session(session).select("+transactionPin");
     const receiverAccount = await Account.findById(toAccount).session(session);
 
+    
     if (!senderAccount) throw new Error("Sender account not found");
     if (!receiverAccount) throw new Error("Receiver account not found");
 
+    if(!senderAccount.transactionPin){
+        throw new Error("First SET Your Account PIN")
+    }
     if (senderAccount._id.toString() === receiverAccount._id.toString()) {
       throw new Error("Cannot transfer to same account");
     }
-
-    // 🔥 Atomic debit
+    const isValidPin = await senderAccount.comparePin(PIN);
+    if(!isValidPin){
+        throw new Error("Invalid PIN");
+    }
     const updatedSender = await Account.findOneAndUpdate(
       {
         _id: senderAccount._id,
@@ -40,27 +49,25 @@ export const transaction = async (req, res) => {
       throw new Error("Insufficient balance");
     }
 
-    // 🔥 Atomic credit
-    await Account.findByIdAndUpdate(
+    const updatedReceiver = await Account.findByIdAndUpdate(
       receiverAccount._id,
       { $inc: { balance: amount } },
-      { session }
+      { returnDocument: "after", session }
     );
 
-    // 🔥 Ledger
     await Ledger.insertMany(
       [
         {
-          account: senderAccount._id,
+          account: updatedSender._id,
           type: "DEBIT",
           amount,
-          description: `Sent to ${receiverAccount.name} (Acc: ${receiverAccount._id})`
+          description: `Sent to ${updatedReceiver.name}`
         },
         {
-          account: receiverAccount._id,
+          account: updatedReceiver._id,
           type: "CREDIT",
           amount,
-          description: `Received from ${updatedSender.name} (Acc: ${senderAccount._id})`
+          description: `Received from ${updatedSender.name}`
         }
       ],
       { session }
@@ -70,9 +77,11 @@ export const transaction = async (req, res) => {
 
     return res.json({
       message: "Transaction successful",
-      from:senderAccount.name,
-      to:receiverAccount.name,
-      amount
+      from: updatedSender.name,
+      to: updatedReceiver.name,
+      amount,
+      senderBalance: updatedSender.balance,
+      receiverBalance: updatedReceiver.balance
     });
 
   } catch (error) {
@@ -83,23 +92,45 @@ export const transaction = async (req, res) => {
     });
 
   } finally {
-    session.endSession(); // 🔥 best practice
+    session.endSession();
   }
 };
 
-export const fetchBalance=async (req,res)=>{
-    const userAccount=await Account.findOne({user:req.userId});
-    if(!userAccount){
-        return res.json({message:"Account Not found"});
-    }
+export const fetchBalance = async (req, res) => {
+  try {
+    const {PIN}=req.body;
+    if (!PIN || !/^\d{4}$/.test(PIN)) {
+      throw new Error("Enter valid 4-digit PIN");
+     }
     const { page = 1, limit = 10 } = req.query;
-    const transactionHistory=await Ledger.find({account:userAccount._id}).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(Number(limit));
-    if(transactionHistory.length===0){
-        return res.json({message:"No transaction Yet"});
-    };
-    res.json({
-        message:"Transaction History",
-        TotalBalance:userAccount.balance,
-        History:transactionHistory
+
+    const userAccount = await Account.findOne({ user: req.userId });
+  
+    const isValidPin = await userAccount.comparePin(PIN);
+    if(!isValidPin){
+        throw new Error("Invalid PIN");
+    }
+    if (!userAccount) {
+      return res.json({ message: "Account Not found" });
+    }
+
+    const transactionHistory = await Ledger.find({
+      account: userAccount._id
+    })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit));
+
+    return res.json({
+      message: "Transaction History",
+      TotalBalance: userAccount.balance,
+      page: Number(page),
+      History: transactionHistory
     });
-}
+
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message
+    });
+  }
+};
