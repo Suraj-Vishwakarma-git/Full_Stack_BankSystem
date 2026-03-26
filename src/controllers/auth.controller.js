@@ -1,6 +1,7 @@
 import { User } from "../models/user.model.js";
 import { Account } from "../models/account.model.js";
 import secure from "../middleware/authMiddleware.js";
+import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET="supersecret";
@@ -67,6 +68,7 @@ export const account = async (req, res) => {
     }
 
     const newAccount = await Account.create({
+      name:user.name,
       user: user._id,
       status: "ACTIVE"
     });
@@ -86,3 +88,27 @@ export const account = async (req, res) => {
     });
   }
 };
+
+export const loginaccount=async (req,res)=>{
+  const {email,password}=req.body;
+  const user=await User.findOne({email});
+  if(!user){
+    return res.json({
+      message:"User Not found signup first"
+    });
+  }
+  const bcpair=await bcrypt.compare(password,user.password);
+  if(!bcpair) return res.json({message:"Invalid password"});
+  const account=await Account.findOne({user:user._id});
+  if(!account){
+     return res.jso({
+      message:"Account not found Create Account First "
+     })
+  };
+  const token=jwt.sign({userId:user._id},JWT_SECRET,{expiresIn:"7d"});
+  res.json({
+    message:"Login Successfull",
+    userName:user.name,
+    token
+  });
+}
