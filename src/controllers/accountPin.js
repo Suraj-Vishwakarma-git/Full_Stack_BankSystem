@@ -1,18 +1,15 @@
 import { Account } from "../models/account.model.js";
 
-// ✅ SET PIN
 export const setPin = async (req, res) => {
     try {
         const { pin } = req.body;
 
-        // 🔒 Validate PIN
         if (!pin || typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
             return res.status(400).json({
                 message: "PIN must be exactly 4 digits"
             });
         }
 
-        // ⚠️ include hidden field
         const account = await Account
             .findOne({ user: req.userId })
             .select("+transactionPin");
@@ -23,14 +20,12 @@ export const setPin = async (req, res) => {
             });
         }
 
-        // ❗ now this works correctly
         if (account.transactionPin) {
             return res.status(400).json({
                 message: "PIN already set. Use change PIN."
             });
         }
 
-        // ✅ DO NOT HASH HERE (model will do it)
         account.transactionPin = pin;
 
         await account.save();
@@ -47,12 +42,10 @@ export const setPin = async (req, res) => {
 };
 
 
-// ✅ CHANGE PIN
 export const changePin = async (req, res) => {
     try {
         const { oldPin, newPin } = req.body;
 
-        // 🔒 Validate inputs
         if (!oldPin || typeof oldPin !== "string") {
             return res.status(400).json({
                 message: "Old PIN is required"
@@ -71,7 +64,6 @@ export const changePin = async (req, res) => {
             });
         }
 
-        // ⚠️ include hidden field
         const account = await Account
             .findOne({ user: req.userId })
             .select("+transactionPin");
@@ -88,7 +80,6 @@ export const changePin = async (req, res) => {
             });
         }
 
-        // 🔐 Compare old PIN
         const isMatch = await account.comparePin(oldPin);
 
         if (!isMatch) {
@@ -97,7 +88,6 @@ export const changePin = async (req, res) => {
             });
         }
 
-        // ✅ DO NOT HASH HERE
         account.transactionPin = newPin;
 
         await account.save();
