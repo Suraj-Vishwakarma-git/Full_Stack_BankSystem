@@ -17,11 +17,8 @@ const secure = (req, res, next) => {
         message: "Unauthorized"
       });
     }
-
     const decoded = jwt.verify(token, JWT_SECRET);
-
     req.userId = decoded.userId;
-
     next();
 
   } catch (e) {

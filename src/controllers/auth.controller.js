@@ -1,6 +1,7 @@
 import { User } from "../models/user.model.js";
 import { Account } from "../models/account.model.js";
 import secure from "../middleware/authMiddleware.js";
+import { sendEmail,sendTransactionEmail } from "../utils/sendEmail.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
@@ -15,6 +16,9 @@ export const signup = async (req, res) => {
       return res.status(400).json({
         message: "All fields are required"
       });
+    }
+    if (!/\S+@\S+\.\S+/.test(email)) {
+    return res.status(400).json({ message: "Invalid email" });
     }
 
     // Check existing user
@@ -38,7 +42,7 @@ export const signup = async (req, res) => {
 
     return res.status(201).json({
       message: "Signup Successfully",
-      user: userData,
+      userData,
       token
     });
 
@@ -73,6 +77,7 @@ export const account = async (req, res) => {
       status: "ACTIVE"
     });
 
+    // await sendEmail(user.email, "Welcome to Bank 🚀", user.name);
     return res.status(201).json({
       message: "Account Created Successfully",
       account: {
@@ -89,26 +94,69 @@ export const account = async (req, res) => {
   }
 };
 
-export const loginaccount=async (req,res)=>{
-  const {email,password}=req.body;
-  const user=await User.findOne({email});
-  if(!user){
-    return res.json({
-      message:"User Not found signup first"
+export const loginaccount = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email:email });
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found, signup first"
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        message: "Invalid password"
+      });
+    }
+
+    const account = await Account.findOne({ user: user._id });
+    if (!account) {
+      return res.status(404).json({
+        message: "Account not found, create account first"
+      });
+    }
+
+    const token = jwt.sign(
+      { userId: user._id },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      message: "Login successful",
+      user,
+      token
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
     });
   }
-  const bcpair=await bcrypt.compare(password,user.password);
-  if(!bcpair) return res.json({message:"Invalid password"});
-  const account=await Account.findOne({user:user._id});
-  if(!account){
-     return res.jso({
-      message:"Account not found Create Account First "
-     })
-  };
-  const token=jwt.sign({userId:user._id},JWT_SECRET,{expiresIn:"7d"});
-  res.json({
-    message:"Login Successfull",
-    userName:user.name,
-    token
-  });
-}
+};
+
+export const useraccount = async (req, res) => {
+  try {
+    const user = await User.findById({_id:req.userId});
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const userAccount = await Account.findOne({ user: user._id });
+
+    if (!userAccount) {
+      return res.status(404).json({ message: "Create Account first" });
+    }
+
+    return res.status(200).json({
+      email: user.email,
+      userAccount
+    });
+
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
+  }
+};

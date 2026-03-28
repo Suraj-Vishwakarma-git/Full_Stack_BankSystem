@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { Account } from "../models/account.model.js";
 import { Ledger } from "../models/ledger.model.js";
-
+import { sendTransactionEmail } from "../utils/sendEmail.js";
 export const transaction = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -73,7 +73,26 @@ export const transaction = async (req, res) => {
       { session }
     );
 
+
     await session.commitTransaction();
+
+  // sender → DEBIT
+sendTransactionEmail(
+  senderUser.email,
+  senderUser.name,
+  amount,
+  receiverAccount._id,
+  "DEBIT"
+);
+
+// receiver → CREDIT
+sendTransactionEmail(
+  receiverUser.email,
+  receiverUser.name,
+  amount,
+  senderAccount._id,
+  "CREDIT"
+);
 
     return res.json({
       message: "Transaction successful",
