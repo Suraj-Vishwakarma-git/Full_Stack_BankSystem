@@ -1,16 +1,20 @@
 import mongoose from "mongoose";
 import { Account } from "../models/account.model.js";
 import { Ledger } from "../models/ledger.model.js";
+import { User } from "../models/user.model.js";
 import { sendTransactionEmail } from "../utils/sendEmail.js";
+
 export const transaction = async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
-    const { toAccount, amount,PIN } = req.body;
+    const { toAccount, amount, PIN } = req.body;
 
+    // 🔴 VALIDATIONS
     if (!PIN || !/^\d{4}$/.test(PIN)) {
       throw new Error("Enter valid 4-digit PIN");
-}
+    }
+
     if (!amount || amount <= 0) {
       throw new Error("Invalid amount");
     }
@@ -20,28 +24,27 @@ export const transaction = async (req, res) => {
     const senderAccount = await Account.findOne({ user: req.userId }).session(session);
     const receiverAccount = await Account.findById(toAccount).session(session);
 
-    
     if (!senderAccount) throw new Error("Sender account not found");
     if (!receiverAccount) throw new Error("Receiver account not found");
 
-    if(!senderAccount.transactionPin){
-        throw new Error("First SET Your Account PIN")
+    if (!senderAccount.transactionPin) {
+      throw new Error("First SET Your Account PIN");
     }
+
     if (senderAccount._id.toString() === receiverAccount._id.toString()) {
       throw new Error("Cannot transfer to same account");
     }
+
     const isValidPin = await senderAccount.comparePin(PIN);
-    if(!isValidPin){
-        throw new Error("Invalid PIN");
-    }
+    if (!isValidPin) throw new Error("Invalid PIN");
+
+    // 🔥 SAFE BALANCE UPDATE
     const updatedSender = await Account.findOneAndUpdate(
       {
         _id: senderAccount._id,
         balance: { $gte: amount }
       },
-      {
-        $inc: { balance: -amount }
-      },
+      { $inc: { balance: -amount } },
       { returnDocument: "after", session }
     );
 
@@ -55,6 +58,7 @@ export const transaction = async (req, res) => {
       { returnDocument: "after", session }
     );
 
+    // 🔹 LEDGER
     await Ledger.insertMany(
       [
         {
@@ -73,26 +77,34 @@ export const transaction = async (req, res) => {
       { session }
     );
 
-
+    // ✅ COMMIT FIRST
     await session.commitTransaction();
 
-  // sender → DEBIT
-sendTransactionEmail(
-  senderUser.email,
-  senderUser.name,
-  amount,
-  receiverAccount._id,
-  "DEBIT"
-);
+    // 🔹 FETCH USERS AFTER COMMIT
+    const senderUser = await User.findById(senderAccount.user);
+    const receiverUser = await User.findById(receiverAccount.user);
 
-// receiver → CREDIT
-sendTransactionEmail(
-  receiverUser.email,
-  receiverUser.name,
-  amount,
-  senderAccount._id,
-  "CREDIT"
-);
+    // 🔹 EMAIL (SAFE)
+    // try {
+    //   await sendTransactionEmail(
+    //     senderUser.email,
+    //     senderUser.name,
+    //     amount,
+    //     updatedReceiver.name,
+    //     "DEBIT"
+    //   );
+
+    //   await sendTransactionEmail(
+    //     receiverUser.email,
+    //     receiverUser.name,
+    //     amount,
+    //     updatedSender.name,
+    //     "CREDIT"
+    //   );
+    // } catch (err) {
+    //   console.error("Email failed:", err);
+    //   // ❗ DO NOT THROW
+    // }
 
     return res.json({
       message: "Transaction successful",
@@ -104,7 +116,11 @@ sendTransactionEmail(
     });
 
   } catch (error) {
-    await session.abortTransaction();
+
+    // ✅ SAFE ABORT
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
 
     return res.status(400).json({
       message: error.message
@@ -114,7 +130,6 @@ sendTransactionEmail(
     session.endSession();
   }
 };
-
 export const fetchBalance = async (req, res) => {
   try {
     const { PIN } = req.body;
