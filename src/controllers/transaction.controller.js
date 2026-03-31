@@ -17,7 +17,7 @@ export const transaction = async (req, res) => {
 
     session.startTransaction();
 
-    const senderAccount = await Account.findOne({ user: req.userId }).session(session).select("+transactionPin");
+    const senderAccount = await Account.findOne({ user: req.userId }).session(session);
     const receiverAccount = await Account.findById(toAccount).session(session);
 
     
@@ -117,20 +117,31 @@ sendTransactionEmail(
 
 export const fetchBalance = async (req, res) => {
   try {
-    const {PIN}=req.body;
+    const { PIN } = req.body;
+
     if (!PIN || !/^\d{4}$/.test(PIN)) {
-      throw new Error("Enter valid 4-digit PIN");
-     }
+      return res.status(400).json({ message: "Enter valid 4-digit PIN" });
+    }
+
     const { page = 1, limit = 10 } = req.query;
 
     const userAccount = await Account.findOne({ user: req.userId });
-  
-    const isValidPin = await userAccount.comparePin(PIN);
-    if(!isValidPin){
-        throw new Error("Invalid PIN");
-    }
+
     if (!userAccount) {
-      return res.json({ message: "Account Not found" });
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    // 🔴 NEW CONDITION: Check if PIN is set or not
+    if (!userAccount.transactionPin) {
+      return res.status(400).json({
+        message: "PIN not set. Please create your PIN first."
+      });
+    }
+
+    const isValidPin = await userAccount.comparePin(PIN);
+
+    if (!isValidPin) {
+      return res.status(401).json({ message: "Invalid PIN" });
     }
 
     const transactionHistory = await Ledger.find({
@@ -140,7 +151,7 @@ export const fetchBalance = async (req, res) => {
       .skip((page - 1) * limit)
       .limit(Number(limit));
 
-    return res.json({
+    return res.status(200).json({
       message: "Transaction History",
       TotalBalance: userAccount.balance,
       page: Number(page),
@@ -149,7 +160,7 @@ export const fetchBalance = async (req, res) => {
 
   } catch (error) {
     return res.status(500).json({
-      message: error.message
+      message: "Server error"
     });
   }
 };

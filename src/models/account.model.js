@@ -25,8 +25,7 @@ const accountSchema = new mongoose.Schema({
         default: "ACTIVE"
     },
     transactionPin: {
-        type: String,
-        select: false // 🔒 hidden by default
+        type: String
     }
 }, { timestamps: true });
 

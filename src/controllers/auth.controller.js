@@ -160,3 +160,66 @@ export const useraccount = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+
+export const allaccounts=async (req,res)=>{
+  try{
+    const account=await Account.find().populate("user","name email");
+    const result=account.map(acc=>({
+      id:acc._id,
+      name:acc.user?.name,
+      email:acc.user?.email,
+      status:acc.status
+    }));
+    res.json({users:result});
+  }catch(e){
+    console.log(e);
+    res.status(500).json({message:"Server error"});
+  }
+}
+export const searchAccounts = async (req, res) => {
+  try {
+    const search = req.query.search || "";
+
+    const users = await User.find({
+      $or: [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } }
+      ]
+    }).limit(5); // limit for safety
+
+    if (users.length === 0) {
+      return res.status(404).json({ message: "No user found" });
+    }
+
+    // 🔥 CASE 1: Multiple users
+    if (users.length > 1) {
+      return res.status(200).json({
+        multiple: true,
+        message: "Multiple users found, try with email"
+      });
+    }
+
+    // 🔥 CASE 2: Exactly one user
+    const account = await Account.findOne({ user: users[0]._id })
+      .populate("user", "name email");
+
+    if (!account) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    return res.json({
+      multiple: false,
+      user: {
+        id: account._id,
+        name: account.user?.name,
+        email: account.user?.email,
+        status: account.status
+      }
+    });
+
+  } catch (e) {
+    console.log(e);
+    res.status(500).json({ message: "Server error" });
+  }
+};
