@@ -1,8 +1,7 @@
 import jwt from "jsonwebtoken";
-
 const JWT_SECRET = "supersecret";
 
-const secure = (req, res, next) => {
+export const secure = (req, res, next) => {
   try {
     let token;
 
@@ -29,4 +28,4 @@ const secure = (req, res, next) => {
   }
 };
 
-export default secure;
+

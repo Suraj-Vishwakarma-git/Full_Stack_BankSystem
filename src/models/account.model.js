@@ -11,6 +11,11 @@ const accountSchema = new mongoose.Schema({
         ref: "User",
         required: true
     },
+    accountNumber: {
+     type: String,
+     unique: true,
+     required: true
+},
     balance: {
         type: Number,
         default: 0

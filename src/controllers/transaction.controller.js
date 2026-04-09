@@ -132,31 +132,12 @@ export const transaction = async (req, res) => {
 };
 export const fetchBalance = async (req, res) => {
   try {
-    const { PIN } = req.body;
-
-    if (!PIN || !/^\d{4}$/.test(PIN)) {
-      return res.status(400).json({ message: "Enter valid 4-digit PIN" });
-    }
-
     const { page = 1, limit = 10 } = req.query;
 
     const userAccount = await Account.findOne({ user: req.userId });
 
     if (!userAccount) {
       return res.status(404).json({ message: "Account not found" });
-    }
-
-    // 🔴 NEW CONDITION: Check if PIN is set or not
-    if (!userAccount.transactionPin) {
-      return res.status(400).json({
-        message: "PIN not set. Please create your PIN first."
-      });
-    }
-
-    const isValidPin = await userAccount.comparePin(PIN);
-
-    if (!isValidPin) {
-      return res.status(401).json({ message: "Invalid PIN" });
     }
 
     const transactionHistory = await Ledger.find({
@@ -177,5 +158,42 @@ export const fetchBalance = async (req, res) => {
     return res.status(500).json({
       message: "Server error"
     });
+  }
+};
+export const accdata = async (req, res) => {
+  try {
+    const acc = await Account.findOne({ user: req.userId });
+
+    if (!acc) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    const result = await Ledger.aggregate([
+      { $match: { account: acc._id } }, // ✅ FIXED
+      {
+        $group: {
+          _id: "$type",
+          total: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    let credit = 0;
+    let debit = 0;
+
+    result.forEach(item => {
+      if (item._id === "CREDIT") credit = item.total;
+      if (item._id === "DEBIT") debit = item.total;
+    });
+
+    res.json({
+      accountNo: acc.accountNumber,
+      balance: acc.balance,
+      creditAmt: credit,
+      debitAmt: debit
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };

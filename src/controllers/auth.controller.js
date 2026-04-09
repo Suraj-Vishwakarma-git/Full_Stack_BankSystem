@@ -1,6 +1,6 @@
 import { User } from "../models/user.model.js";
 import { Account } from "../models/account.model.js";
-import secure from "../middleware/authMiddleware.js";
+import {secure} from "../middleware/authMiddleware.js";
 import { sendEmail,sendTransactionEmail } from "../utils/sendEmail.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -70,10 +70,19 @@ export const account = async (req, res) => {
         message: "Account already exists for this user"
       });
     }
+    let accNo;
+    let exists = true;
+
+    while (exists) {
+      accNo = generateAccountNumber();
+      const existingAcc = await Account.findOne({ accountNumber: accNo });
+      if (!existingAcc) exists = false;
+    }
 
     const newAccount = await Account.create({
       name:user.name,
       user: user._id,
+      accountNumber:accNo,
       status: "ACTIVE"
     });
 
@@ -83,7 +92,8 @@ export const account = async (req, res) => {
       account: {
         name: user.name,
         balance: newAccount.balance,
-        status: newAccount.status
+        status: newAccount.status,
+        accountNo:newAccount.accountNumber
       }
     });
 
@@ -161,6 +171,38 @@ export const useraccount = async (req, res) => {
   }
 };
 
+export const secureTransaction = async (req, res) => {
+  try {
+    const { PIN } = req.body;
+
+    if (!PIN) {
+      return res.status(400).json({ message: "PIN is required" });
+    }
+
+    const acc = await Account.findOne({ user: req.userId });
+
+    if (!acc) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    if (!acc.transactionPin) {
+      return res.status(400).json({ message: "Create PIN first" });
+    }
+
+    const isMatch = await bcrypt.compare(PIN, acc.transactionPin);
+
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid PIN" });
+    }
+
+    // ✅ SEND RESPONSE (IMPORTANT)
+    return res.status(200).json({ message: "PIN verified" });
+
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
 
 export const allaccounts=async (req,res)=>{
   try{
@@ -223,3 +265,9 @@ export const searchAccounts = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+function generateAccountNumber() {
+  const prefix = "APEX"; 
+  const random = Math.floor(1000000000 + Math.random() * 9000000000);
+  return prefix + random;
+}
