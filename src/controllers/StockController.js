@@ -256,6 +256,7 @@ export const buyAsset = async (req, res) => {
     res.json({
       success: true,
       message: "Asset purchased successfully",
+      totalAmount
     });
 
   } catch (error) {
@@ -340,3 +341,45 @@ export const getPortfolio = async (req, res) => {
   }
 };
 
+
+export const getCurrentPrice = async (req, res) => {
+  try {
+    const { asset, quantity } = req.body;
+
+    if (!asset) {
+      return res.status(400).json({ error: "Asset is required" });
+    }
+
+    if (quantity === undefined || quantity <= 0) {
+      return res.status(400).json({ error: "Invalid quantity" });
+    }
+
+    const pricePerUnit = await getPrice(asset);
+
+    if (pricePerUnit === null || pricePerUnit === undefined) {
+      throw new Error("Price not available");
+    }
+
+    if (typeof pricePerUnit !== "number") {
+      throw new Error("Invalid price format from API");
+    }
+
+    const totalAmount = pricePerUnit * quantity;
+
+    res.json({
+      asset,
+      pricePerUnit,
+      quantity,
+      totalAmount,
+      currency: "INR"
+    });
+
+  } catch (error) {
+    console.error("Error in getCurrentPrice:", error.message);
+
+    res.status(500).json({
+      error: "Failed to fetch price",
+      details: error.message
+    });
+  }
+};
