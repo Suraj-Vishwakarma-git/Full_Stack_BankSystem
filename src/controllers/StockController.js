@@ -3,7 +3,7 @@ import { Account } from "../models/account.model.js";
 import { Portfolio } from "../models/Portfolio.js";
 import { StockTransaction } from "../models/StockTransaction.js";
 import { Ledger } from "../models/ledger.model.js";
-import { getPrice } from "../services/priceService.js";
+import { getPrice,getHistory } from "../services/priceService.js";
 
 
 export const sellAsset = async (req, res) => {
@@ -381,5 +381,26 @@ export const getCurrentPrice = async (req, res) => {
       error: "Failed to fetch price",
       details: error.message
     });
+  }
+};
+
+
+export const dataForGraph = (req, res) => {
+  try {
+    const { asset } = req.query;
+
+    if (!asset) {
+      return res.status(400).json({ error: "Asset required" });
+    }
+
+    const graph = getHistory(asset);
+
+    res.json({
+      graph
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch graph" });
   }
 };
