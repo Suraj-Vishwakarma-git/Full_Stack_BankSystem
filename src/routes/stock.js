@@ -7,7 +7,7 @@ stock.get("/",(req,res)=>{
 })
 stock.post("/currentprice",getCurrentPrice);
 stock.post("/buyasset",secure,buyAsset);
-stock.post("/getPortfolio",secure,getPortfolio);
+stock.get("/getPortfolio",secure,getPortfolio);
 stock.post("/sellasset",secure,sellAsset);
 stock.get("/graph",dataForGraph)
 

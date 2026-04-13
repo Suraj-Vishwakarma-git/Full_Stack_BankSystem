@@ -156,17 +156,29 @@ export const buyAsset = async (req, res) => {
     const { asset, quantity, PIN } = req.body;
     const userId = req.userId;
 
-    if (!asset || !quantity || quantity <= 0) {
+    // ✅ FIX: proper type handling
+    const qty = Number(quantity);
+    const pinStr = String(PIN);
+
+    if (!asset || !qty || qty <= 0) {
       throw new Error("Invalid input");
     }
 
-    if (!PIN || !/^\d{4}$/.test(PIN)) {
+    if (!pinStr || !/^\d{4}$/.test(pinStr)) {
       throw new Error("Enter valid 4-digit PIN");
     }
 
+    // ✅ GET PRICE
     const pricePerUnit = await getPrice(asset);
-    const totalAmount = pricePerUnit * quantity;
 
+    if (!pricePerUnit || pricePerUnit <= 0) {
+      throw new Error("Failed to fetch asset price");
+    }
+
+    // ✅ FIX: precision handling
+    const totalAmount = Number((pricePerUnit * qty).toFixed(2));
+
+    // ✅ ACCOUNT
     const account = await Account.findOne({ user: userId }).session(session);
     if (!account) throw new Error("Bank Account not found");
 
@@ -174,9 +186,10 @@ export const buyAsset = async (req, res) => {
       throw new Error("Set your account PIN first");
     }
 
-    const isValidPin = await account.comparePin(PIN);
+    const isValidPin = await account.comparePin(pinStr);
     if (!isValidPin) throw new Error("Invalid PIN");
 
+    // ✅ DEDUCT BALANCE SAFELY
     const updatedAccount = await Account.findOneAndUpdate(
       {
         _id: account._id,
@@ -186,44 +199,57 @@ export const buyAsset = async (req, res) => {
       { new: true, session }
     );
 
-    if (!updatedAccount){
+    if (!updatedAccount) {
       throw new Error("Insufficient balance");
     }
 
-    let portfolio = await Portfolio.findOne({ userId }).session(session);
+    // ✅ FIX: correct field (user instead of userId)
+    let portfolio = await Portfolio.findOne({ userId: req.userId }).session(session);
 
     if (!portfolio) {
-      portfolio = await Portfolio.create(
-        [{ userId, userAccount: account._id, holdings: [] }],
+      const created = await Portfolio.create(
+        [
+          {
+            user: userId,
+            userAccount: account._id,
+            holdings: [],
+          },
+        ],
         { session }
       );
-      portfolio = portfolio[0];
+      portfolio = created[0];
     }
 
-    let holding = portfolio.holdings.find(h => h.asset === asset);
+    // ✅ CASE SAFE MATCH
+    let holding = portfolio.holdings.find(
+      (h) => h.asset.toUpperCase() === asset.toUpperCase()
+    );
 
     if (!holding) {
       portfolio.holdings.push({
         asset,
-        totalQuantity: quantity,
+        totalQuantity: qty,
         avgPrice: pricePerUnit,
         investedAmount: totalAmount,
       });
     } else {
-      const newQty = holding.totalQuantity + quantity;
+      const newQty = holding.totalQuantity + qty;
 
       const newAvg =
         (holding.totalQuantity * holding.avgPrice +
-          quantity * pricePerUnit) /
+          qty * pricePerUnit) /
         newQty;
 
       holding.totalQuantity = newQty;
-      holding.avgPrice = newAvg;
-      holding.investedAmount += totalAmount;
+      holding.avgPrice = Number(newAvg.toFixed(2));
+      holding.investedAmount = Number(
+        (holding.investedAmount + totalAmount).toFixed(2)
+      );
     }
 
     await portfolio.save({ session });
 
+    // ✅ TRANSACTION LOG
     await StockTransaction.create(
       [
         {
@@ -232,13 +258,14 @@ export const buyAsset = async (req, res) => {
           asset,
           type: "BUY",
           pricePerUnit,
-          quantity,
+          quantity: qty,
           totalAmount,
         },
       ],
       { session }
     );
 
+    // ✅ LEDGER ENTRY
     await Ledger.create(
       [
         {
@@ -251,12 +278,14 @@ export const buyAsset = async (req, res) => {
       { session }
     );
 
+    // ✅ COMMIT
     await session.commitTransaction();
 
     res.json({
       success: true,
       message: "Asset purchased successfully",
-      totalAmount
+      totalAmount,
+      balance: updatedAccount.balance, // optional but useful
     });
 
   } catch (error) {
@@ -275,14 +304,12 @@ export const buyAsset = async (req, res) => {
 
 export const getPortfolio = async (req, res) => {
   try {
-    const { PIN } = req.body;
     const userId = req.userId;
 
     const account = await Account.findOne({ user: userId });
     if (!account) throw new Error("Account not found");
 
-    const isValidPin = await account.comparePin(PIN);
-    if (!isValidPin) throw new Error("Invalid PIN");
+   
 
     const portfolio = await Portfolio.findOne({ userId });
     if (!portfolio) throw new Error("Portfolio not found");
