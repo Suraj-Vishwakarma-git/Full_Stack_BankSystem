@@ -3,9 +3,9 @@ import { Account } from "../models/account.model.js";
 import { Portfolio } from "../models/Portfolio.js";
 import { StockTransaction } from "../models/StockTransaction.js";
 import { Ledger } from "../models/ledger.model.js";
-import { getPrice,getHistory } from "../services/priceService.js";
+import { getPrice, getHistory } from "../services/priceService.js";
 
-
+// ================= SELL =================
 export const sellAsset = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -15,7 +15,6 @@ export const sellAsset = async (req, res) => {
     const { asset, quantity, PIN } = req.body;
     const userId = req.userId;
 
-    // ✅ VALIDATION
     if (!["GOLD", "SILVER"].includes(asset)) {
       throw new Error("Invalid asset type");
     }
@@ -28,44 +27,38 @@ export const sellAsset = async (req, res) => {
       throw new Error("Enter valid 4-digit PIN");
     }
 
-    // ✅ ACCOUNT CHECK
     const account = await Account.findOne({ user: userId }).session(session);
     if (!account) throw new Error("Bank Account not found");
-
-    if (!account.transactionPin) {
-      throw new Error("Set your account PIN first");
-    }
 
     const isValidPin = await account.comparePin(PIN);
     if (!isValidPin) throw new Error("Invalid PIN");
 
-    // ✅ PORTFOLIO
-    const portfolio = await Portfolio.findOne({ userId }).session(session);
+    // ✅ FIX: support both user & userId
+    const portfolio = await Portfolio.findOne({
+      $or: [{ user: userId }, { userId: userId }],
+    }).session(session);
+
     if (!portfolio) throw new Error("Portfolio not found");
 
-    const holding = portfolio.holdings.find(h => h.asset === asset);
+    const holding = portfolio.holdings.find((h) => h.asset === asset);
     if (!holding) throw new Error("Asset holding not found");
 
     if (holding.totalQuantity < quantity) {
       throw new Error("Insufficient quantity");
     }
 
-    // ✅ PRICE FETCH
     const pricePerUnit = await getPrice(asset);
     const totalAmount = Number((pricePerUnit * quantity).toFixed(2));
 
-    // ✅ COST BASIS (IMPORTANT)
     const costBasis = Number((holding.avgPrice * quantity).toFixed(2));
-
-    // ✅ PROFIT / LOSS
     const profit = Number((totalAmount - costBasis).toFixed(2));
 
-    // ✅ UPDATE HOLDING
     const newQty = holding.totalQuantity - quantity;
 
     if (newQty === 0) {
-      // remove asset completely
-      portfolio.holdings = portfolio.holdings.filter(h => h.asset !== asset);
+      portfolio.holdings = portfolio.holdings.filter(
+        (h) => h.asset !== asset
+      );
     } else {
       holding.totalQuantity = newQty;
       holding.investedAmount = Number(
@@ -78,14 +71,12 @@ export const sellAsset = async (req, res) => {
 
     await portfolio.save({ session });
 
-    // ✅ CREDIT MONEY TO BANK
     const updatedAccount = await Account.findByIdAndUpdate(
       account._id,
       { $inc: { balance: totalAmount } },
-      { new: true, session }
+      { returnDocument: "after" }
     );
 
-    // ✅ TRANSACTION LOG
     await StockTransaction.create(
       [
         {
@@ -103,7 +94,6 @@ export const sellAsset = async (req, res) => {
       { session }
     );
 
-    // ✅ LEDGER ENTRY
     await Ledger.create(
       [
         {
@@ -116,7 +106,6 @@ export const sellAsset = async (req, res) => {
       { session }
     );
 
-    // ✅ COMMIT
     await session.commitTransaction();
 
     res.json({
@@ -131,22 +120,19 @@ export const sellAsset = async (req, res) => {
         balance: updatedAccount.balance,
       },
     });
-
   } catch (error) {
-    if (session?.inTransaction?.()) {
-      await session.abortTransaction();
-    }
+    if (session.inTransaction()) await session.abortTransaction();
 
     res.status(400).json({
       success: false,
       message: error.message,
     });
-
   } finally {
     session.endSession();
   }
 };
 
+// ================= BUY =================
 export const buyAsset = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -156,7 +142,6 @@ export const buyAsset = async (req, res) => {
     const { asset, quantity, PIN } = req.body;
     const userId = req.userId;
 
-    // ✅ FIX: proper type handling
     const qty = Number(quantity);
     const pinStr = String(PIN);
 
@@ -164,63 +149,53 @@ export const buyAsset = async (req, res) => {
       throw new Error("Invalid input");
     }
 
-    if (!pinStr || !/^\d{4}$/.test(pinStr)) {
+    if (!/^\d{4}$/.test(pinStr)) {
       throw new Error("Enter valid 4-digit PIN");
     }
 
-    // ✅ GET PRICE
     const pricePerUnit = await getPrice(asset);
-
-    if (!pricePerUnit || pricePerUnit <= 0) {
-      throw new Error("Failed to fetch asset price");
-    }
-
-    // ✅ FIX: precision handling
     const totalAmount = Number((pricePerUnit * qty).toFixed(2));
 
-    // ✅ ACCOUNT
     const account = await Account.findOne({ user: userId }).session(session);
     if (!account) throw new Error("Bank Account not found");
-
-    if (!account.transactionPin) {
-      throw new Error("Set your account PIN first");
-    }
 
     const isValidPin = await account.comparePin(pinStr);
     if (!isValidPin) throw new Error("Invalid PIN");
 
-    // ✅ DEDUCT BALANCE SAFELY
     const updatedAccount = await Account.findOneAndUpdate(
       {
         _id: account._id,
         balance: { $gte: totalAmount },
       },
       { $inc: { balance: -totalAmount } },
-      { new: true, session }
+      { returnDocument: "after" }
     );
 
     if (!updatedAccount) {
       throw new Error("Insufficient balance");
     }
 
-    // ✅ FIX: correct field (user instead of userId)
-    let portfolio = await Portfolio.findOne({ userId: req.userId }).session(session);
+    // ✅ FIX: support both user & userId
+    let portfolio = await Portfolio.findOne({
+      userAccount: account._id,
+      $or: [{ user: userId }, { userId: userId }],
+    }).session(session);
 
     if (!portfolio) {
-      const created = await Portfolio.create(
-        [
-          {
-            user: userId,
-            userAccount: account._id,
-            holdings: [],
-          },
-        ],
-        { session }
-      );
+     const created = await Portfolio.create(
+  [
+    {
+      userId: userId,     // 🔥 REQUIRED FIX
+      user: userId,       // (keep for compatibility)
+      userAccount: account._id,
+      holdings: [],
+    },
+  ],
+  { session }
+);
       portfolio = created[0];
     }
 
-    // ✅ CASE SAFE MATCH
     let holding = portfolio.holdings.find(
       (h) => h.asset.toUpperCase() === asset.toUpperCase()
     );
@@ -249,7 +224,6 @@ export const buyAsset = async (req, res) => {
 
     await portfolio.save({ session });
 
-    // ✅ TRANSACTION LOG
     await StockTransaction.create(
       [
         {
@@ -265,7 +239,6 @@ export const buyAsset = async (req, res) => {
       { session }
     );
 
-    // ✅ LEDGER ENTRY
     await Ledger.create(
       [
         {
@@ -278,20 +251,16 @@ export const buyAsset = async (req, res) => {
       { session }
     );
 
-    // ✅ COMMIT
     await session.commitTransaction();
 
     res.json({
       success: true,
       message: "Asset purchased successfully",
       totalAmount,
-      balance: updatedAccount.balance, // optional but useful
+      balance: updatedAccount.balance,
     });
-
   } catch (error) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
+    if (session.inTransaction()) await session.abortTransaction();
 
     res.status(400).json({
       success: false,
@@ -302,6 +271,7 @@ export const buyAsset = async (req, res) => {
   }
 };
 
+// ================= GET PORTFOLIO =================
 export const getPortfolio = async (req, res) => {
   try {
     const userId = req.userId;
@@ -309,10 +279,23 @@ export const getPortfolio = async (req, res) => {
     const account = await Account.findOne({ user: userId });
     if (!account) throw new Error("Account not found");
 
-   
+    // ✅ FIX: support both user & userId
+    const portfolio = await Portfolio.findOne({
+      $or: [{ user: userId }, { userId: userId }],
+    });
 
-    const portfolio = await Portfolio.findOne({ userId });
-    if (!portfolio) throw new Error("Portfolio not found");
+    if (!portfolio) {
+      return res.json({
+        success: true,
+        data: {
+          balance: account.balance,
+          holdings: [],
+          totalCurrentValue: 0,
+          totalInvested: 0,
+          totalProfitLoss: 0,
+        },
+      });
+    }
 
     const [goldPrice, silverPrice] = await Promise.all([
       getPrice("GOLD"),
@@ -359,7 +342,6 @@ export const getPortfolio = async (req, res) => {
         totalProfitLoss,
       },
     });
-
   } catch (error) {
     res.status(400).json({
       success: false,
