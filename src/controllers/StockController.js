@@ -413,3 +413,52 @@ export const dataForGraph = (req, res) => {
     res.status(500).json({ error: "Failed to fetch graph" });
   }
 };
+
+
+
+
+export const getStockHistory = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const account = await Account.findOne({ user: userId });
+
+    if (!account) {
+      return res.status(404).json({
+        message: "Account not found",
+      });
+    }
+
+    const transactions = await StockTransaction.find({
+      userId: userId,
+      account: account._id,
+    })
+      .sort({ createdAt: -1 }) // latest first
+      .lean();
+
+    const formatted = transactions.map((tx) => ({
+      id: tx._id,
+      type: tx.type,
+      asset: tx.asset,
+      quantity: tx.quantity,
+      pricePerUnit: tx.pricePerUnit,
+      totalAmount: tx.totalAmount,
+      status: tx.status,
+      createdAt: tx.createdAt,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: formatted.length,
+      data: formatted,
+    });
+
+  } catch (error) {
+    console.error("Stock History Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch transaction history",
+    });
+  }
+};
