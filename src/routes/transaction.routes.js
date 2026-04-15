@@ -1,4 +1,4 @@
-import { fetchBalance, transaction ,accdata} from "../controllers/transaction.controller.js";
+import { fetchBalance, transaction ,accdata,AddMoney} from "../controllers/transaction.controller.js";
 import express from "express";
 import {secure} from "../middleware/authMiddleware.js";
 import { setPin } from "../controllers/accountPin.js";
@@ -9,4 +9,5 @@ userTransaction.post("/fetchbalance",secure,fetchBalance);
 userTransaction.post("/setpin",secure,setPin);
 userTransaction.get("/accdata",secure,accdata)
 userTransaction.post("/changepin",secure,changePin);
+userTransaction.post("/addmoney",secure,AddMoney);
 export default userTransaction;

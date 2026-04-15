@@ -197,3 +197,77 @@ export const accdata = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+export const AddMoney = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    let { amount } = req.body;
+
+    // 🔹 BASIC VALIDATION
+    const numericAmount = Number(amount);
+
+    if (!numericAmount || numericAmount <= 0) {
+      throw new Error("Enter a valid amount");
+    }
+
+    // (optional but good UX limit)
+    const MAX_LIMIT = 100000;
+
+    if (numericAmount > MAX_LIMIT) {
+      throw new Error(`Max allowed is ₹${MAX_LIMIT}`);
+    }
+
+    // 🔹 START TRANSACTION
+    session.startTransaction();
+
+    // 🔹 UPDATE BALANCE (clean + direct)
+    const updatedAccount = await Account.findOneAndUpdate(
+      { user: req.userId },
+      { $inc: { balance: numericAmount } },
+      { new: true, session }
+    );
+
+    if (!updatedAccount) {
+      throw new Error("Account not found");
+    }
+
+    // 🔹 LEDGER ENTRY
+    await Ledger.create(
+      [
+        {
+          account: updatedAccount._id,
+          type: "CREDIT",
+          amount: numericAmount,
+          description: "ApexTrust"
+        }
+      ],
+      { session }
+    );
+
+    // 🔹 COMMIT
+    await session.commitTransaction();
+
+    // 🔹 RESPONSE
+    return res.status(200).json({
+      success: true,
+      message: "Money added successfully",
+      amount: numericAmount,
+      balance: updatedAccount.balance
+    });
+
+  } catch (error) {
+
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+
+  } finally {
+    session.endSession();
+  }
+};
