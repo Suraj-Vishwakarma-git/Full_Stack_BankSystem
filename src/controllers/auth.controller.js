@@ -1,8 +1,9 @@
 import { User } from "../models/user.model.js";
 import { Account } from "../models/account.model.js";
 import {secure} from "../middleware/authMiddleware.js";
-import { sendEmail,sendTransactionEmail } from "../utils/sendEmail.js";
-import bcrypt from "bcrypt";
+import { sendEmail,sendTransactionEmail ,otpMail} from "../utils/sendEmail.js";
+import bcrypt, { hash } from "bcrypt";
+import { otpModel } from "../models/otpmodel.js";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET="supersecret";
@@ -86,7 +87,7 @@ export const account = async (req, res) => {
       status: "ACTIVE"
     });
 
-    // await sendEmail(user.email, "Welcome to Bank 🚀", user.name);
+    await sendEmail(user.email, "Welcome to Bank 🚀", user.name);
     return res.status(201).json({
       message: "Account Created Successfully",
       account: {
@@ -170,6 +171,141 @@ export const useraccount = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+export const sendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+
+    // delete old OTPs
+    await otpModel.deleteMany({ email });
+
+    const otp = generateOTP();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+
+    await otpModel.create({
+      user: user._id,
+      email,
+      otp: hashedOtp,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    });
+
+    await otpMail(user.email, user.name || "User", otp);
+
+    res.json({ message: "OTP sent successfully" });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Error sending mail" });
+  }
+};
+
+export const verifyOTP = async (req, res) => {
+  try {
+    const { email, userOTP } = req.body;
+
+    const record = await otpModel.findOne({ email });
+
+    if (!record) {
+      return res.status(400).json({ message: "OTP Expired" });
+    }
+
+    // expiry check
+    if (record.expiresAt < Date.now()) {
+      await otpModel.deleteMany({ email });
+      return res.status(400).json({ message: "OTP Expired" });
+    }
+
+    const isMatch = await bcrypt.compare(userOTP, record.otp);
+
+    if (!isMatch) {
+      return res.status(400).json({ message: "Incorrect OTP" });
+    }
+
+    // delete OTP after success
+    await otpModel.deleteMany({ email });
+
+    // generate reset token
+    const token = jwt.sign({ email }, "RESET_SECRET", {
+      expiresIn: "10m",
+    });
+
+    res.json({
+      message: "OTP Verified",
+      resetToken: token,
+    });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Error verifying OTP" });
+  }
+};
+
+export const changepass = async (req, res) => {
+  try {
+    const { oldPass, newPass, token } = req.body;
+
+    if (!newPass) {
+      return res.status(400).json({ message: "New password required" });
+    }
+
+    let user;
+
+    // 🔐 Forgot password (OTP flow)
+    if (token) {
+      let decoded;
+
+      try {
+        decoded = jwt.verify(token, "RESET_SECRET");
+      } catch {
+        return res.status(400).json({ message: "Invalid or expired token" });
+      }
+
+      user = await User.findOne({ email: decoded.email });
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+    }
+
+    // 🔐 Logged-in user
+    else if (oldPass && req.userId) {
+      user = await User.findById(req.userId);
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const isMatch = await bcrypt.compare(oldPass, user.password);
+
+      if (!isMatch) {
+        return res.status(400).json({ message: "Old password incorrect" });
+      }
+    }
+
+    else {
+      return res.status(400).json({
+        message: "Invalid request (provide oldPass or token)",
+      });
+    }
+
+    // ✅ IMPORTANT: no manual hashing
+    user.password = newPass;
+
+    await user.save(); // pre-save will hash
+
+    res.json({ message: "Password updated successfully" });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 
 export const secureTransaction = async (req, res) => {
   try {
@@ -271,3 +407,7 @@ function generateAccountNumber() {
   const random = Math.floor(1000000000 + Math.random() * 9000000000);
   return prefix + random;
 }
+
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
