@@ -13,9 +13,35 @@ const transporter = nodemailer.createTransport({
 export const sendEmail = async (to, subject, name) => {
   try {
     const html = `
-      <h2>🏦 Bank System</h2>
-      <h3>Hello ${name}</h3>
-      <p>Your account has been created successfully 🚀</p>
+    <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
+      <div style="max-width:600px; margin:auto; background:white; border-radius:10px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+        
+        <div style="background:#4f46e5; color:white; padding:20px; text-align:center;">
+          <h2 style="margin:0;">🏦 Bank System</h2>
+        </div>
+
+        <div style="padding:25px;">
+          <h3 style="margin-bottom:10px;">Hello ${name},</h3>
+          
+          <p style="color:#555; font-size:15px;">
+            Welcome aboard! 🎉 Your account has been successfully created.
+          </p>
+
+          <div style="margin:20px 0; padding:15px; background:#eef2ff; border-left:4px solid #4f46e5;">
+            <p style="margin:0; font-weight:500;">
+              You can now securely send, receive, and manage your money.
+            </p>
+          </div>
+
+          <p style="color:#777; font-size:14px;">
+            If this wasn’t you, please contact support immediately.
+          </p>
+
+          <p style="margin-top:30px;">– Team Bank System 🚀</p>
+        </div>
+
+      </div>
+    </div>
     `;
 
     await transporter.sendMail({
@@ -31,33 +57,70 @@ export const sendEmail = async (to, subject, name) => {
   }
 };
 
+
 // 🔹 Transaction Email
-export const sendTransactionEmail = async (email,name,amount,otherParty,type) => {
+export const sendTransactionEmail = async (email, name, amount, otherParty, type) => {
   try {
     let subject;
     let message;
 
+    const color = type === "DEBIT" ? "#ef4444" : "#22c55e";
+    const title = type === "DEBIT" ? "Money Sent 💸" : "Money Received 💰";
+
     if (type === "DEBIT") {
       subject = "Money Sent 💸";
       message = `
-        <h3>Hello ${name}</h3>
         <p>You sent <b>₹${amount}</b></p>
         <p>To: <b>${otherParty}</b></p>
       `;
     } else {
       subject = "Money Received 💰";
       message = `
-        <h3>Hello ${name}</h3>
         <p>You received <b>₹${amount}</b></p>
         <p>From: <b>${otherParty}</b></p>
       `;
     }
 
+    const html = `
+    <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
+      <div style="max-width:600px; margin:auto; background:white; border-radius:10px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+
+        <div style="background:${color}; color:white; padding:20px; text-align:center;">
+          <h2 style="margin:0;">${title}</h2>
+        </div>
+
+        <div style="padding:25px;">
+          <h3>Hello ${name},</h3>
+
+          <div style="margin:20px 0; padding:20px; background:#f9fafb; border-radius:8px; text-align:center;">
+            <h1 style="margin:0; color:${color};">₹${amount}</h1>
+            <p style="margin-top:10px; color:#555;">
+              ${type === "DEBIT" ? "Amount Debited" : "Amount Credited"}
+            </p>
+          </div>
+
+          <div style="font-size:15px; color:#444;">
+            ${message}
+          </div>
+
+          <div style="margin-top:25px; padding:15px; background:#fff7ed; border-left:4px solid #f59e0b;">
+            <p style="margin:0; font-size:14px;">
+              If you didn’t authorize this transaction, please contact support immediately.
+            </p>
+          </div>
+
+          <p style="margin-top:30px;">– Secure Banking Team 🔐</p>
+        </div>
+
+      </div>
+    </div>
+    `;
+
     await transporter.sendMail({
       from: "ssvsurajvishwakarma@gmail.com",
       to: email,
       subject,
-      html: message,
+      html,
     });
 
     console.log("Transaction email sent");

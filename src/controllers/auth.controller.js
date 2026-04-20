@@ -87,7 +87,7 @@ export const account = async (req, res) => {
       status: "ACTIVE"
     });
 
-    // await sendEmail(user.email, "Welcome to Bank 🚀", user.name);
+    await sendEmail(user.email, "Welcome to Bank 🚀", user.name);
     return res.status(201).json({
       message: "Account Created Successfully",
       account: {
@@ -355,6 +355,7 @@ export const allaccounts=async (req,res)=>{
     res.status(500).json({message:"Server error"});
   }
 }
+
 export const searchAccounts = async (req, res) => {
   try {
     const search = req.query.search || "";
