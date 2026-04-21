@@ -76,15 +76,11 @@ export const transaction = async (req, res) => {
       ],
       { session }
     );
-
-    // ✅ COMMIT FIRST
     await session.commitTransaction();
 
-    // 🔹 FETCH USERS AFTER COMMIT
     const senderUser = await User.findById(senderAccount.user);
     const receiverUser = await User.findById(receiverAccount.user);
 
-    // 🔹 EMAIL (SAFE)
     // try {
     //   await sendTransactionEmail(
     //     senderUser.email,
