@@ -33,7 +33,6 @@ const portfolioSchema = new mongoose.Schema(
       index: true,
     },
 
-    // ✅ BACKWARD COMPATIBILITY (optional)
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
