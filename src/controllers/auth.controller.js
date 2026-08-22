@@ -22,7 +22,6 @@ export const signup = async (req, res) => {
     return res.status(400).json({ message: "Invalid email" });
     }
 
-    // Check existing user
     const isExists = await User.findOne({ email });
     if (isExists) {
       return res.status(400).json({
@@ -30,14 +29,12 @@ export const signup = async (req, res) => {
       });
     }
     
-    // Create user (password auto hashed)
     const user = await User.create({
       name,
       email,
       password
     });
     const token=jwt.sign({userId:user._id},JWT_SECRET,{expiresIn:"7d"});
-    // Remove password
     const userData = user.toObject();
     delete userData.password;
 
@@ -181,7 +178,6 @@ export const sendOtp = async (req, res) => {
       return res.status(404).json({ message: "User Not Found" });
     }
 
-    // delete old OTPs
     await otpModel.deleteMany({ email });
 
     const otp = generateOTP();
@@ -214,7 +210,6 @@ export const verifyOTP = async (req, res) => {
       return res.status(400).json({ message: "OTP Expired" });
     }
 
-    // expiry check
     if (record.expiresAt < Date.now()) {
       await otpModel.deleteMany({ email });
       return res.status(400).json({ message: "OTP Expired" });
@@ -226,10 +221,8 @@ export const verifyOTP = async (req, res) => {
       return res.status(400).json({ message: "Incorrect OTP" });
     }
 
-    // delete OTP after success
     await otpModel.deleteMany({ email });
 
-    // generate reset token
     const token = jwt.sign({ email }, "RESET_SECRET", {
       expiresIn: "10m",
     });
@@ -255,7 +248,6 @@ export const changepass = async (req, res) => {
 
     let user;
 
-    // 🔐 Forgot password (OTP flow)
     if (token) {
       let decoded;
 
@@ -272,7 +264,6 @@ export const changepass = async (req, res) => {
       }
     }
 
-    // 🔐 Logged-in user
     else if (oldPass && req.userId) {
       user = await User.findById(req.userId);
 
@@ -293,11 +284,9 @@ export const changepass = async (req, res) => {
       });
     }
 
-    // ✅ IMPORTANT: no manual hashing
     user.password = newPass;
 
-    await user.save(); // pre-save will hash
-
+    await user.save(); 
     res.json({ message: "Password updated successfully" });
 
   } catch (err) {
@@ -331,7 +320,6 @@ export const secureTransaction = async (req, res) => {
       return res.status(401).json({ message: "Invalid PIN" });
     }
 
-    // ✅ SEND RESPONSE (IMPORTANT)
     return res.status(200).json({ message: "PIN verified" });
 
   } catch (err) {
@@ -371,7 +359,6 @@ export const searchAccounts = async (req, res) => {
       return res.status(404).json({ message: "No user found" });
     }
 
-    // 🔥 CASE 1: Multiple users
     if (users.length > 1) {
       return res.status(200).json({
         multiple: true,
@@ -379,7 +366,6 @@ export const searchAccounts = async (req, res) => {
       });
     }
 
-    // 🔥 CASE 2: Exactly one user
     const account = await Account.findOne({ user: users[0]._id })
       .populate("user", "name email");
 

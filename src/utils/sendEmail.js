@@ -1,15 +1,13 @@
 import nodemailer from "nodemailer";
 
-// ✅ GLOBAL TRANSPORTER
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: "ssvsurajvishwakarma@gmail.com",
-    pass: "myqafsbbfytybmxs",
+    user: "abc@gmail.com",
+    pass: "123",
   },
 });
 
-// 🔹 Welcome Email
 export const sendEmail = async (to, subject, name) => {
   try {
     const html = `
@@ -45,7 +43,7 @@ export const sendEmail = async (to, subject, name) => {
     `;
 
     await transporter.sendMail({
-      from: "ssvsurajvishwakarma@gmail.com",
+      from: "abc@gmail.com",
       to,
       subject,
       html,
@@ -58,7 +56,6 @@ export const sendEmail = async (to, subject, name) => {
 };
 
 
-// 🔹 Transaction Email
 export const sendTransactionEmail = async (email, name, amount, otherParty, type) => {
   try {
     let subject;
@@ -117,7 +114,7 @@ export const sendTransactionEmail = async (email, name, amount, otherParty, type
     `;
 
     await transporter.sendMail({
-      from: "ssvsurajvishwakarma@gmail.com",
+      from: "abc@gmail.com",
       to: email,
       subject,
       html,
@@ -180,7 +177,7 @@ export const otpMail = async (email, name, otp) => {
     `;
 
     await transporter.sendMail({
-      from:"ssvsurajvishwakarma@gmail.com",
+      from:"abc@gmail.com",
       to: email,
       subject,
       html,

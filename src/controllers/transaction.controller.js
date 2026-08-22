@@ -10,7 +10,6 @@ export const transaction = async (req, res) => {
   try {
     const { toAccount, amount, PIN } = req.body;
 
-    // 🔴 VALIDATIONS
     if (!PIN || !/^\d{4}$/.test(PIN)) {
       throw new Error("Enter valid 4-digit PIN");
     }
@@ -58,7 +57,6 @@ export const transaction = async (req, res) => {
       { returnDocument: "after", session }
     );
 
-    // 🔹 LEDGER
     await Ledger.insertMany(
       [
         {

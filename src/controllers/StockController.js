@@ -5,7 +5,6 @@ import { StockTransaction } from "../models/StockTransaction.js";
 import { Ledger } from "../models/ledger.model.js";
 import { getPrice, getHistory } from "../services/priceService.js";
 
-// ================= SELL =================
 export const sellAsset = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -33,7 +32,6 @@ export const sellAsset = async (req, res) => {
     const isValidPin = await account.comparePin(PIN);
     if (!isValidPin) throw new Error("Invalid PIN");
 
-    // ✅ FIX: support both user & userId
     const portfolio = await Portfolio.findOne({
       $or: [{ user: userId }, { userId: userId }],
     }).session(session);
@@ -132,7 +130,6 @@ export const sellAsset = async (req, res) => {
   }
 };
 
-// ================= BUY =================
 export const buyAsset = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -175,7 +172,6 @@ export const buyAsset = async (req, res) => {
       throw new Error("Insufficient balance");
     }
 
-    // ✅ FIX: support both user & userId
     let portfolio = await Portfolio.findOne({
       userAccount: account._id,
       $or: [{ user: userId }, { userId: userId }],
@@ -185,8 +181,8 @@ export const buyAsset = async (req, res) => {
      const created = await Portfolio.create(
   [
     {
-      userId: userId,     // 🔥 REQUIRED FIX
-      user: userId,       // (keep for compatibility)
+      userId: userId,     
+      user: userId,      
       userAccount: account._id,
       holdings: [],
     },
@@ -271,7 +267,6 @@ export const buyAsset = async (req, res) => {
   }
 };
 
-// ================= GET PORTFOLIO =================
 export const getPortfolio = async (req, res) => {
   try {
     const userId = req.userId;
@@ -279,7 +274,6 @@ export const getPortfolio = async (req, res) => {
     const account = await Account.findOne({ user: userId });
     if (!account) throw new Error("Account not found");
 
-    // ✅ FIX: support both user & userId
     const portfolio = await Portfolio.findOne({
       $or: [{ user: userId }, { userId: userId }],
     });

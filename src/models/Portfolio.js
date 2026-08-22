@@ -25,7 +25,6 @@ const holdingSchema = new mongoose.Schema({
 
 const portfolioSchema = new mongoose.Schema(
   {
-    // ✅ PRIMARY FIELD (USE THIS EVERYWHERE)
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -53,7 +52,6 @@ const portfolioSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ PREVENT DUPLICATE PORTFOLIOS (VERY IMPORTANT)
 portfolioSchema.index({ userId: 1, userAccount: 1 }, { unique: true });
 
 export const Portfolio = mongoose.model("Portfolio", portfolioSchema);

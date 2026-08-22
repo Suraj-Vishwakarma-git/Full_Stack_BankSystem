@@ -35,7 +35,6 @@ const accountSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 
-// 🔐 Hash PIN automatically before saving
 accountSchema.pre("save", async function () {
     if (!this.isModified("transactionPin")) return;
 
@@ -43,7 +42,6 @@ accountSchema.pre("save", async function () {
 });
 
 
-// 🔐 Compare PIN
 accountSchema.methods.comparePin = async function (enteredPin) {
     if (!this.transactionPin) return false;
     return await bcrypt.compare(enteredPin, this.transactionPin);
