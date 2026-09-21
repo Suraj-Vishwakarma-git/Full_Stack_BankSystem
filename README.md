@@ -64,32 +64,8 @@ The main goal of the project was to understand how a real-world banking-style ap
 
 The application follows a simple client-server architecture.
 
-┌──────────────────────────┐
-│       React Frontend     │
-│                          │
-│  Pages / Components      │
-│  Forms / Dashboard       │
-│  API Requests            │
-└────────────┬─────────────┘
-             │
-             │ HTTP / REST API
-             ▼
-┌──────────────────────────┐
-│     Node.js + Express    │
-│                          │
-│  Routes                  │
-│  Controllers             │
-│  Middleware              │
-│  Business Logic          │
-└────────────┬─────────────┘
-             │
-             │ Database Queries
-             ▼
-┌──────────────────────────┐
-│         MongoDB          │
-│                          │
-│  Users                   │
-│  Accounts                │
-│  Transactions            │
-│  Portfolio Data          │
-└──────────────────────────┘
+```mermaid
+flowchart TD
+    A[React Frontend<br/>Pages • Components • Forms • Dashboard] -->|HTTP / REST API| B[Node.js + Express<br/>Routes • Controllers • Middleware • Business Logic]
+    B -->|Database Queries| C[(MongoDB<br/>Users • Accounts • Transactions • Portfolio)]
+```
